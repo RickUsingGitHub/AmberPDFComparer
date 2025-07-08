@@ -76,23 +76,23 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label for="peak-rate" class="block text-sm font-medium text-gray-700">Peak Rate (c/kWh)</label>
-                    <input type="number" id="peak-rate" value="70.65" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="peak-rate" value="55" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
                 <div>
                     <label for="offpeak-rate" class="block text-sm font-medium text-gray-700">Off-Peak Rate (c/kWh)</label>
-                    <input type="number" id="offpeak-rate" value="37.33" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="offpeak-rate" value="35" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
                 <div>
                     <label for="shoulder-rate" class="block text-sm font-medium text-gray-700">Shoulder/Flat Rate (c/kWh)</label>
-                    <input type="number" id="shoulder-rate" value="37.33" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="shoulder-rate" value="25" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
                 <div>
                     <label for="feedin-rate" class="block text-sm font-medium text-gray-700">Solar Feed-In (c/kWh)</label>
-                    <input type="number" id="feedin-rate" value="5.0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="feedin-rate" value="5" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
                 <div>
                     <label for="daily-charge" class="block text-sm font-medium text-gray-700">Daily Supply Charge (c/day)</label>
-                    <input type="number" id="daily-charge" value="123.20" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="daily-charge" value="100" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
             </div>
         </section>
@@ -236,6 +236,7 @@
             const chargesMatch = text.match(/CHARGES TOTAL\s+\$([\d\.]+)/);
             const creditsMatch = text.match(/CREDITS\s+\$([\d\.]+)/);
             
+            // --- REVERTED USAGE DATA REGEX ---
             const peakRegex = /Network\s*-\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             const offPeakRegex = /Network\s*-\s*Off\s*[-–]?\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             const shoulderRegex = /Network\s*-\s*Flat\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
@@ -252,48 +253,53 @@
             const solarExportMatch = text.match(/Solar Exports.*?([\d\.]+)kWh/);
             const billingDaysMatch = text.match(/Billing Days:\s+(\d+)/);
             
-            // --- REVISED BILLING PERIOD LOGIC ---
-            const issueDateMatch = text.match(/Issue Date:\s*(\d{2})\/(\d{2})\/(\d{4})/);
-            let issueDate = null;
-            if (issueDateMatch) {
-                issueDate = new Date(issueDateMatch[3], issueDateMatch[2] - 1, issueDateMatch[1]);
-            }
-
-            const dateRangeRegex = /Network\s*-\s*(?:Peak|Off\s*[-–]?\s*Peak|Flat)\s*Energy\s+(\d{2}\s+\w{3,4})\s*[-–]\s*(\d{2}\s+\w{3,4})/g;
-            let allDates = [];
-            let match;
-            const monthMap = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
-
-            while ((match = dateRangeRegex.exec(text)) !== null) {
-                const parseDateWithCorrectYear = (dateStr) => {
-                    if (!issueDate) return null; // Cannot determine year without issue date
-                    const [day, monthName] = dateStr.split(' ');
-                    const monthIndex = monthMap[monthName.slice(0, 3)];
-                    let year = issueDate.getFullYear();
-                    // If the usage month is later in the year than the issue month, it must be from the previous year.
-                    // e.g., Issue date Jan 2025, usage date Dec -> must be Dec 2024.
-                    if (monthIndex > issueDate.getMonth()) {
-                        year -= 1;
-                    }
-                    return new Date(year, monthIndex, parseInt(day, 10));
-                };
-                allDates.push(parseDateWithCorrectYear(match[1]));
-                allDates.push(parseDateWithCorrectYear(match[2]));
-            }
-
             let displayDateRange = 'N/A';
             let sortableDate = null;
 
-            if (allDates.length > 0 && allDates.every(d => d !== null)) {
-                allDates.sort((a, b) => a - b);
-                const startDate = allDates[0];
-                const endDate = allDates[allDates.length - 1];
+            // Use the most reliable date format first
+            const explicitBillingPeriodMatch = text.match(/Billing period:(?:\s*\d+\s+Days\s+\()?\s*(\d{2})\/(\d{2})\/(\d{4})\s*[-–]\s*(\d{2})\/(\d{2})\/(\d{4})\)?/);
+
+            if (explicitBillingPeriodMatch) {
+                const [_, startDay, startMonth, startYear, endDay, endMonth, endYear] = explicitBillingPeriodMatch;
+                const startDate = new Date(`${startYear}-${startMonth}-${startDay}`);
+                const endDate = new Date(`${endYear}-${endMonth}-${endDay}`);
                 sortableDate = startDate;
-                
+
                 const format = (date) => `${date.getDate().toString().padStart(2, '0')} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
                 displayDateRange = `${format(startDate)} - ${format(endDate)}`;
-            } else if (issueDate === null) {
-                 displayDateRange = 'Could not find Issue Date';
+            } else {
+                // Fallback to the logic that combines date ranges from usage lines
+                const issueDateMatch = text.match(/Issue Date:\s*(\d{2})\/(\d{2})\/(\d{4})/);
+                if (issueDateMatch) {
+                    const issueDate = new Date(issueDateMatch[3], issueDateMatch[2] - 1, issueDateMatch[1]);
+                    const dateRangeRegex = /Network\s*-\s*(?:Peak|Off\s*[-–]?\s*Peak|Flat)\s*Energy\s+(\d{2}\s+\w{3,4})\s*[-–]\s*(\d{2}\s+\w{3,4})/g;
+                    let allDates = [];
+                    let match;
+                    const monthMap = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
+
+                    while ((match = dateRangeRegex.exec(text)) !== null) {
+                        const parseDateWithCorrectYear = (dateStr) => {
+                            const [day, monthName] = dateStr.split(' ');
+                            const monthIndex = monthMap[monthName.slice(0, 3)];
+                            let year = issueDate.getFullYear();
+                            if (monthIndex > issueDate.getMonth() && Math.abs(monthIndex - issueDate.getMonth()) > 6) {
+                                year -= 1;
+                            }
+                            return new Date(year, monthIndex, parseInt(day, 10));
+                        };
+                        allDates.push(parseDateWithCorrectYear(match[1]));
+                        allDates.push(parseDateWithCorrectYear(match[2]));
+                    }
+
+                    if (allDates.length > 0) {
+                        allDates.sort((a, b) => a - b);
+                        const startDate = allDates[0];
+                        const endDate = allDates[allDates.length - 1];
+                        sortableDate = startDate;
+                        const format = (date) => `${date.getDate().toString().padStart(2, '0')} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
+                        displayDateRange = `${format(startDate)} - ${format(endDate)}`;
+                    }
+                }
             }
 
 
@@ -314,11 +320,11 @@
         function calculateTouCost(data, rates) {
             if (data.billingDays === 0) return { total: 0 };
 
-            const peakCost = (data.peakKwh * rates.peak) / 100;
-            const offpeakCost = (data.offpeakKwh * rates.offpeak) / 100;
-            const shoulderCost = (data.shoulderKwh * rates.shoulder) / 100;
+            const peakCost = ((data.peakKwh || 0) * rates.peak) / 100;
+            const offpeakCost = ((data.offpeakKwh || 0) * rates.offpeak) / 100;
+            const shoulderCost = ((data.shoulderKwh || 0) * rates.shoulder) / 100;
             const supplyCost = (data.billingDays * rates.daily) / 100;
-            const solarCredit = (data.solarExportKwh * rates.feedIn) / 100;
+            const solarCredit = ((data.solarExportKwh || 0) * rates.feedIn) / 100;
 
             const totalTouCost = peakCost + offpeakCost + shoulderCost + supplyCost - solarCredit;
             return {
@@ -341,20 +347,20 @@
 
              const amberTooltip = `
                 <div class="tooltip-text">
-                    Charges: \$${amberData.totalCharges.toFixed(2)}<br>
-                    Credits: -\$${amberData.totalCredits.toFixed(2)}<br>
+                    Charges: \$${(amberData.totalCharges || 0).toFixed(2)}<br>
+                    Credits: -\$${(amberData.totalCredits || 0).toFixed(2)}<br>
                     <hr class="my-1 border-gray-500">
-                    <strong>Total: \$${amberData.totalBill.toFixed(2)}</strong>
+                    <strong>Total: \$${(amberData.totalBill || 0).toFixed(2)}</strong>
                 </div>
              `;
 
              const touTooltip = `
                 <div class="tooltip-text">
-                    Peak: \$${touBreakdown.peakCost.toFixed(2)} (${amberData.peakKwh.toFixed(1)} kWh)<br>
-                    Off-Peak: \$${touBreakdown.offpeakCost.toFixed(2)} (${amberData.offpeakKwh.toFixed(1)} kWh)<br>
-                    Shoulder: \$${touBreakdown.shoulderCost.toFixed(2)} (${amberData.shoulderKwh.toFixed(1)} kWh)<br>
+                    Peak: \$${touBreakdown.peakCost.toFixed(2)} (${(amberData.peakKwh || 0).toFixed(1)} kWh)<br>
+                    Off-Peak: \$${touBreakdown.offpeakCost.toFixed(2)} (${(amberData.offpeakKwh || 0).toFixed(1)} kWh)<br>
+                    Shoulder: \$${touBreakdown.shoulderCost.toFixed(2)} (${(amberData.shoulderKwh || 0).toFixed(1)} kWh)<br>
                     Supply: \$${touBreakdown.supplyCost.toFixed(2)}<br>
-                    Solar Credit: -\$${touBreakdown.solarCredit.toFixed(2)} (${amberData.solarExportKwh.toFixed(1)} kWh)<br>
+                    Solar Credit: -\$${touBreakdown.solarCredit.toFixed(2)} (${(amberData.solarExportKwh || 0).toFixed(1)} kWh)<br>
                     <hr class="my-1 border-gray-500">
                     <strong>Total: \$${touBreakdown.total.toFixed(2)}</strong>
                 </div>
@@ -364,7 +370,7 @@
                 <h3 class="font-semibold text-lg">${amberData.dateRange} <span class="text-sm font-normal text-gray-500">(${fileName})</span></h3>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-sm">
                     <div class="tooltip-container">
-                        Amber Bill: <span class="font-medium">$${amberData.totalBill.toFixed(2)}</span>
+                        Amber Bill: <span class="font-medium">$${(amberData.totalBill || 0).toFixed(2)}</span>
                         ${amberTooltip}
                     </div>
                     <div class="tooltip-container">

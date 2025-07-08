@@ -92,7 +92,7 @@
                 </div>
                 <div>
                     <label for="daily-charge" class="block text-sm font-medium text-gray-700">Daily Supply Charge (c/day)</label>
-                    <input type="number" id="daily-charge" value="123.2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="daily-charge" value="123.20" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
             </div>
         </section>
@@ -252,31 +252,50 @@
             const solarExportMatch = text.match(/Solar Exports.*?([\d\.]+)kWh/);
             const billingDaysMatch = text.match(/Billing Days:\s+(\d+)/);
             
-            const issueDateMatch = text.match(/Issue Date:\s*\d{2}\/\d{2}\/(\d{4})/);
-            const billYear = issueDateMatch ? issueDateMatch[1] : new Date().getFullYear().toString();
+            // --- REVISED BILLING PERIOD LOGIC ---
+            const issueDateMatch = text.match(/Issue Date:\s*(\d{2})\/(\d{2})\/(\d{4})/);
+            let issueDate = null;
+            if (issueDateMatch) {
+                issueDate = new Date(issueDateMatch[3], issueDateMatch[2] - 1, issueDateMatch[1]);
+            }
 
             const dateRangeRegex = /Network\s*-\s*(?:Peak|Off\s*[-–]?\s*Peak|Flat)\s*Energy\s+(\d{2}\s+\w{3,4})\s*[-–]\s*(\d{2}\s+\w{3,4})/g;
             let allDates = [];
             let match;
+            const monthMap = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
+
             while ((match = dateRangeRegex.exec(text)) !== null) {
-                const parseDate = (dateStr) => new Date(`${dateStr} ${billYear}`);
-                allDates.push(parseDate(match[1]));
-                allDates.push(parseDate(match[2]));
+                const parseDateWithCorrectYear = (dateStr) => {
+                    if (!issueDate) return null; // Cannot determine year without issue date
+                    const [day, monthName] = dateStr.split(' ');
+                    const monthIndex = monthMap[monthName.slice(0, 3)];
+                    let year = issueDate.getFullYear();
+                    // If the usage month is later in the year than the issue month, it must be from the previous year.
+                    // e.g., Issue date Jan 2025, usage date Dec -> must be Dec 2024.
+                    if (monthIndex > issueDate.getMonth()) {
+                        year -= 1;
+                    }
+                    return new Date(year, monthIndex, parseInt(day, 10));
+                };
+                allDates.push(parseDateWithCorrectYear(match[1]));
+                allDates.push(parseDateWithCorrectYear(match[2]));
             }
 
             let displayDateRange = 'N/A';
             let sortableDate = null;
 
-            if (allDates.length > 0) {
+            if (allDates.length > 0 && allDates.every(d => d !== null)) {
                 allDates.sort((a, b) => a - b);
                 const startDate = allDates[0];
                 const endDate = allDates[allDates.length - 1];
                 sortableDate = startDate;
                 
-                // Updated format function to include the year
                 const format = (date) => `${date.getDate().toString().padStart(2, '0')} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
                 displayDateRange = `${format(startDate)} - ${format(endDate)}`;
+            } else if (issueDate === null) {
+                 displayDateRange = 'Could not find Issue Date';
             }
+
 
             return {
                 totalBill: totalBillMatch ? parseFloat(totalBillMatch[1]) : null,

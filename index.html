@@ -74,7 +74,6 @@
         <section id="tou-settings" class="bg-white p-6 rounded-lg shadow-md mb-8">
             <h2 class="text-2xl font-semibold mb-4 border-b pb-2">TOU Plan Settings (in cents, GST Inclusive)</h2>
             
-            <!-- NEW: Plan Selector Dropdown -->
             <div class="mb-6">
                 <label for="plan-selector" class="block text-sm font-medium text-gray-700">Select a TOU Plan (Ausgrid Network, NSW)</label>
                 <select id="plan-selector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
@@ -136,14 +135,13 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
-        // --- NEW: TOU Plan Data (GST Inclusive) ---
         const touPlans = {
             "agl-standing": {
                 name: "AGL - Standing Offer (July 2024)",
                 peak: 59.30,
                 offpeak: 27.07,
                 shoulder: 33.04,
-                feedIn: 7.7, // Feed-in tariffs are typically quoted GST inclusive
+                feedIn: 7.7,
                 daily: 106.61
             },
             "energy-aus-balance": {
@@ -172,7 +170,6 @@
             }
         };
 
-        // --- DOM Elements ---
         const planSelector = document.getElementById('plan-selector');
         const peakRateInput = document.getElementById('peak-rate');
         const offpeakRateInput = document.getElementById('offpeak-rate');
@@ -187,7 +184,6 @@
         const totalsOutput = document.getElementById('totals-output');
         const loader = document.getElementById('loader');
 
-        // --- NEW: Functions to handle plan selection ---
         function populatePlanSelector() {
             for (const key in touPlans) {
                 const option = document.createElement('option');
@@ -208,21 +204,16 @@
             }
         }
 
-        // --- Event Listeners ---
         planSelector.addEventListener('change', (e) => {
             updateInputsForPlan(e.target.value);
         });
         
-        // --- Initialisation ---
         window.onload = () => {
             populatePlanSelector();
-            // Set a default plan on load
             planSelector.value = "agl-standing";
             updateInputsForPlan("agl-standing");
         };
 
-
-        // --- Existing Bill Processing Logic ---
         processBtn.addEventListener('click', async () => {
             const files = pdfFilesInput.files;
             if (files.length === 0) {
@@ -322,7 +313,8 @@
         });
         
         function parseBillText(text) {
-            const totalBillMatch = text.match(/BILL AMOUNT\s+\-?\$([\d\.]+)/);
+            // This regex now captures the entire money string, including symbols.
+            const totalBillMatch = text.match(/BILL AMOUNT\s+([-\$\d\.]+)/);
             const chargesMatch = text.match(/CHARGES TOTAL\s+\$([\d\.]+)/);
             const creditsMatch = text.match(/CREDITS\s+\$([\d\.]+)/);
             
@@ -391,7 +383,8 @@
 
 
             return {
-                totalBill: totalBillMatch ? parseFloat(totalBillMatch[1]) : null,
+                // The captured string is cleaned of any '$' symbols before parsing.
+                totalBill: totalBillMatch ? parseFloat(totalBillMatch[1].replace('$', '')) : null,
                 totalCharges: chargesMatch ? parseFloat(chargesMatch[1]) : null,
                 totalCredits: creditsMatch ? parseFloat(creditsMatch[1]) : null,
                 dateRange: displayDateRange,

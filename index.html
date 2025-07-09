@@ -72,27 +72,37 @@
 
         <!-- TOU Settings Section -->
         <section id="tou-settings" class="bg-white p-6 rounded-lg shadow-md mb-8">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">TOU Plan Settings (in cents)</h2>
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">TOU Plan Settings (in cents, GST Inclusive)</h2>
+            
+            <!-- NEW: Plan Selector Dropdown -->
+            <div class="mb-6">
+                <label for="plan-selector" class="block text-sm font-medium text-gray-700">Select a TOU Plan (Ausgrid Network, NSW)</label>
+                <select id="plan-selector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <!-- Options will be populated by JavaScript -->
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Rates are indicative and sourced July 2024. Please verify with the retailer for the most current rates.</p>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label for="peak-rate" class="block text-sm font-medium text-gray-700">Peak Rate (c/kWh)</label>
-                    <input type="number" id="peak-rate" value="55" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="peak-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
                 <div>
                     <label for="offpeak-rate" class="block text-sm font-medium text-gray-700">Off-Peak Rate (c/kWh)</label>
-                    <input type="number" id="offpeak-rate" value="35" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="offpeak-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
                 <div>
                     <label for="shoulder-rate" class="block text-sm font-medium text-gray-700">Shoulder/Flat Rate (c/kWh)</label>
-                    <input type="number" id="shoulder-rate" value="25" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="shoulder-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
                 <div>
                     <label for="feedin-rate" class="block text-sm font-medium text-gray-700">Solar Feed-In (c/kWh)</label>
-                    <input type="number" id="feedin-rate" value="5" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="feedin-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
                 <div>
                     <label for="daily-charge" class="block text-sm font-medium text-gray-700">Daily Supply Charge (c/day)</label>
-                    <input type="number" id="daily-charge" value="100" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="daily-charge" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                 </div>
             </div>
         </section>
@@ -126,6 +136,50 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
+        // --- NEW: TOU Plan Data (GST Inclusive) ---
+        const touPlans = {
+            "agl-standing": {
+                name: "AGL - Standing Offer (July 2024)",
+                peak: 59.30,
+                offpeak: 27.07,
+                shoulder: 33.04,
+                feedIn: 7.7, // Feed-in tariffs are typically quoted GST inclusive
+                daily: 106.61
+            },
+            "energy-aus-balance": {
+                name: "EnergyAustralia - Balance Plan (July 2024)",
+                peak: 65.44,
+                offpeak: 27.24,
+                shoulder: 34.42,
+                feedIn: 7.6,
+                daily: 115.25
+            },
+            "origin-go": {
+                name: "Origin - Go Variable (July 2024)",
+                peak: 50.1,
+                offpeak: 24.5,
+                shoulder: 31.2,
+                feedIn: 7.0,
+                daily: 100.5
+            },
+            "custom": {
+                name: "Custom / Manual Entry",
+                peak: 55,
+                offpeak: 35,
+                shoulder: 25,
+                feedIn: 5,
+                daily: 100
+            }
+        };
+
+        // --- DOM Elements ---
+        const planSelector = document.getElementById('plan-selector');
+        const peakRateInput = document.getElementById('peak-rate');
+        const offpeakRateInput = document.getElementById('offpeak-rate');
+        const shoulderRateInput = document.getElementById('shoulder-rate');
+        const feedinRateInput = document.getElementById('feedin-rate');
+        const dailyChargeInput = document.getElementById('daily-charge');
+        
         const processBtn = document.getElementById('process-btn');
         const pdfFilesInput = document.getElementById('pdf-files');
         const resultsSection = document.getElementById('results-section');
@@ -133,6 +187,42 @@
         const totalsOutput = document.getElementById('totals-output');
         const loader = document.getElementById('loader');
 
+        // --- NEW: Functions to handle plan selection ---
+        function populatePlanSelector() {
+            for (const key in touPlans) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = touPlans[key].name;
+                planSelector.appendChild(option);
+            }
+        }
+
+        function updateInputsForPlan(planKey) {
+            const plan = touPlans[planKey];
+            if (plan) {
+                peakRateInput.value = plan.peak;
+                offpeakRateInput.value = plan.offpeak;
+                shoulderRateInput.value = plan.shoulder;
+                feedinRateInput.value = plan.feedIn;
+                dailyChargeInput.value = plan.daily;
+            }
+        }
+
+        // --- Event Listeners ---
+        planSelector.addEventListener('change', (e) => {
+            updateInputsForPlan(e.target.value);
+        });
+        
+        // --- Initialisation ---
+        window.onload = () => {
+            populatePlanSelector();
+            // Set a default plan on load
+            planSelector.value = "agl-standing";
+            updateInputsForPlan("agl-standing");
+        };
+
+
+        // --- Existing Bill Processing Logic ---
         processBtn.addEventListener('click', async () => {
             const files = pdfFilesInput.files;
             if (files.length === 0) {
@@ -146,11 +236,11 @@
             totalsOutput.innerHTML = '';
 
             const touRates = {
-                peak: parseFloat(document.getElementById('peak-rate').value),
-                offpeak: parseFloat(document.getElementById('offpeak-rate').value),
-                shoulder: parseFloat(document.getElementById('shoulder-rate').value),
-                feedIn: parseFloat(document.getElementById('feedin-rate').value),
-                daily: parseFloat(document.getElementById('daily-charge').value)
+                peak: parseFloat(peakRateInput.value),
+                offpeak: parseFloat(offpeakRateInput.value),
+                shoulder: parseFloat(shoulderRateInput.value),
+                feedIn: parseFloat(feedinRateInput.value),
+                daily: parseFloat(dailyChargeInput.value)
             };
 
             let grandTotalAmber = 0;
@@ -236,7 +326,6 @@
             const chargesMatch = text.match(/CHARGES TOTAL\s+\$([\d\.]+)/);
             const creditsMatch = text.match(/CREDITS\s+\$([\d\.]+)/);
             
-            // --- REVERTED USAGE DATA REGEX ---
             const peakRegex = /Network\s*-\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             const offPeakRegex = /Network\s*-\s*Off\s*[-–]?\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             const shoulderRegex = /Network\s*-\s*Flat\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
@@ -256,7 +345,6 @@
             let displayDateRange = 'N/A';
             let sortableDate = null;
 
-            // Use the most reliable date format first
             const explicitBillingPeriodMatch = text.match(/Billing period:(?:\s*\d+\s+Days\s+\()?\s*(\d{2})\/(\d{2})\/(\d{4})\s*[-–]\s*(\d{2})\/(\d{2})\/(\d{4})\)?/);
 
             if (explicitBillingPeriodMatch) {
@@ -268,7 +356,6 @@
                 const format = (date) => `${date.getDate().toString().padStart(2, '0')} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
                 displayDateRange = `${format(startDate)} - ${format(endDate)}`;
             } else {
-                // Fallback to the logic that combines date ranges from usage lines
                 const issueDateMatch = text.match(/Issue Date:\s*(\d{2})\/(\d{2})\/(\d{4})/);
                 if (issueDateMatch) {
                     const issueDate = new Date(issueDateMatch[3], issueDateMatch[2] - 1, issueDateMatch[1]);

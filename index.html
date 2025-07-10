@@ -122,11 +122,13 @@
                 <h2 class="text-2xl font-semibold">Results</h2>
                 <div id="loader" class="loader ml-4 hidden"></div>
             </div>
-            <div id="results-output" class="space-y-4">
-                <!-- Results will be dynamically inserted here -->
+            <!-- Summary Section -->
+            <div id="summary-output" class="mb-6 pb-4 border-b">
+                <!-- Summary will be dynamically inserted here -->
             </div>
-             <div id="totals-output" class="mt-6 pt-4 border-t font-bold text-lg">
-                <!-- Totals will be dynamically inserted here -->
+            <!-- Monthly Breakdown Section -->
+            <div id="monthly-results-output" class="space-y-4">
+                <!-- Monthly results will be dynamically inserted here -->
             </div>
         </section>
 
@@ -135,6 +137,7 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
+        // Pre-defined TOU plans for selection
         const touPlans = {
             "agl-standing": {
                 name: "AGL - Standing Offer (July 2024)",
@@ -170,6 +173,7 @@
             }
         };
 
+        // DOM Element selectors
         const planSelector = document.getElementById('plan-selector');
         const peakRateInput = document.getElementById('peak-rate');
         const offpeakRateInput = document.getElementById('offpeak-rate');
@@ -180,10 +184,11 @@
         const processBtn = document.getElementById('process-btn');
         const pdfFilesInput = document.getElementById('pdf-files');
         const resultsSection = document.getElementById('results-section');
-        const resultsOutput = document.getElementById('results-output');
-        const totalsOutput = document.getElementById('totals-output');
+        const summaryOutput = document.getElementById('summary-output');
+        const monthlyResultsOutput = document.getElementById('monthly-results-output');
         const loader = document.getElementById('loader');
 
+        // Populates the dropdown with available TOU plans
         function populatePlanSelector() {
             for (const key in touPlans) {
                 const option = document.createElement('option');
@@ -193,6 +198,7 @@
             }
         }
 
+        // Updates the input fields when a new plan is selected
         function updateInputsForPlan(planKey) {
             const plan = touPlans[planKey];
             if (plan) {
@@ -204,16 +210,19 @@
             }
         }
 
+        // Event listener for the plan selector dropdown
         planSelector.addEventListener('change', (e) => {
             updateInputsForPlan(e.target.value);
         });
         
+        // On page load, populate plans and set a default
         window.onload = () => {
             populatePlanSelector();
             planSelector.value = "agl-standing";
             updateInputsForPlan("agl-standing");
         };
 
+        // Main function to process the PDF bills
         processBtn.addEventListener('click', async () => {
             const files = pdfFilesInput.files;
             if (files.length === 0) {
@@ -221,11 +230,13 @@
                 return;
             }
 
+            // Show loader and clear previous results
             resultsSection.classList.remove('hidden');
             loader.classList.remove('hidden');
-            resultsOutput.innerHTML = '';
-            totalsOutput.innerHTML = '';
+            summaryOutput.innerHTML = '';
+            monthlyResultsOutput.innerHTML = '';
 
+            // Get current TOU rates from input fields
             const touRates = {
                 peak: parseFloat(peakRateInput.value),
                 offpeak: parseFloat(offpeakRateInput.value),
@@ -234,11 +245,14 @@
                 daily: parseFloat(dailyChargeInput.value)
             };
 
+            // Initialize grand totals
             let grandTotalAmber = 0;
             let grandTotalTou = 0;
             let grandTotalDifference = 0;
+            let grandTotalBillingDays = 0;
             let allBillsData = [];
 
+            // Create a promise for each file to be processed
             const filePromises = Array.from(files).map(file => {
                 return new Promise((resolve, reject) => {
                     const fileReader = new FileReader();
@@ -247,6 +261,7 @@
                             const typedarray = new Uint8Array(event.target.result);
                             const pdf = await pdfjsLib.getDocument(typedarray).promise;
                             let fullText = '';
+                            // Extract text from all pages of the PDF
                             for (let i = 1; i <= pdf.numPages; i++) {
                                 const page = await pdf.getPage(i);
                                 const textContent = await page.getTextContent();
@@ -256,6 +271,7 @@
                             
                             const extractedData = parseBillText(fullText);
                             
+                            // Validate that essential data was extracted
                             const missingFields = [];
                             if (extractedData.totalBill === null) missingFields.push('Total Bill');
                             if (extractedData.sortableDate === null) missingFields.push('Billing Period');
@@ -263,16 +279,18 @@
                             
                             if (missingFields.length > 0) {
                                 showModal(`Could not extract the following from ${file.name}: ${missingFields.join(', ')}. Please check the bill format.`);
-                                resolve(null);
+                                resolve(null); // Resolve with null if parsing fails
                                 return;
                             }
                             
+                            // Calculate costs and totals
                             const touBreakdown = calculateTouCost(extractedData, touRates);
                             const difference = touBreakdown.total - extractedData.totalBill;
 
                             grandTotalAmber += extractedData.totalBill;
                             grandTotalTou += touBreakdown.total;
                             grandTotalDifference += difference;
+                            grandTotalBillingDays += extractedData.billingDays;
 
                             allBillsData.push({
                                 fileName: file.name,
@@ -292,27 +310,33 @@
                 });
             });
 
+            // Wait for all files to be processed
             await Promise.all(filePromises);
 
+            // Sort bills by date
             allBillsData.sort((a, b) => {
                 if (!a || !b) return 0;
                 return a.amberData.sortableDate - b.amberData.sortableDate;
             });
 
+            // Display each monthly result
             allBillsData.forEach(data => {
                 if (data) {
-                    displayResult(data.fileName, data.amberData, data.touBreakdown, data.difference);
+                    displayMonthlyResult(data.fileName, data.amberData, data.touBreakdown, data.difference);
                 }
             });
 
+            // Display the grand total summary if any bills were processed successfully
             if(allBillsData.filter(d => d).length > 0) {
-                displayTotals(grandTotalAmber, grandTotalTou, grandTotalDifference);
+                displaySummary(grandTotalAmber, grandTotalTou, grandTotalDifference, grandTotalBillingDays);
             }
 
             loader.classList.add('hidden');
         });
         
+        // Parses the extracted PDF text to find billing data
         function parseBillText(text) {
+             // Regex patterns to find specific data points in the bill text
             const totalBillMatch = text.match(/BILL AMOUNT\s+([-\$\d\.]+)/);
             const chargesMatch = text.match(/CHARGES TOTAL\s+\$([\d\.]+)/);
             const creditsMatch = text.match(/CREDITS\s+\$([\d\.]+)/);
@@ -321,6 +345,7 @@
             const offPeakRegex = /Off\s*[-–]?\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             const shoulderRegex = /Flat\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             
+            // Helper to sum up multiple matches (e.g., if usage is split across months)
             const sumMatches = (regex, txt) => {
                 const matches = [...txt.matchAll(regex)];
                 return matches.length > 0 ? matches.reduce((sum, match) => sum + parseFloat(match[1]), 0) : 0;
@@ -336,17 +361,19 @@
             let displayDateRange = 'N/A';
             let sortableDate = null;
 
+            // Attempt to find a clear "Billing period: DD/MM/YYYY - DD/MM/YYYY"
             const explicitBillingPeriodMatch = text.match(/Billing period:(?:\s*\d+\s+Days\s+\()?\s*(\d{2})\/(\d{2})\/(\d{4})\s*[-–]\s*(\d{2})\/(\d{2})\/(\d{4})\)?/);
 
             if (explicitBillingPeriodMatch) {
                 const [_, startDay, startMonth, startYear, endDay, endMonth, endYear] = explicitBillingPeriodMatch;
                 const startDate = new Date(`${startYear}-${startMonth}-${startDay}`);
                 const endDate = new Date(`${endYear}-${endMonth}-${endDay}`);
-                sortableDate = startDate;
+                sortableDate = startDate; // Use start date for sorting
 
                 const format = (date) => `${date.getDate().toString().padStart(2, '0')} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
                 displayDateRange = `${format(startDate)} - ${format(endDate)}`;
             } else {
+                // Fallback: try to infer date range from usage periods and issue date
                 const issueDateMatch = text.match(/Issue Date:\s*(\d{2})\/(\d{2})\/(\d{4})/);
                 if (issueDateMatch) {
                     const issueDate = new Date(issueDateMatch[3], issueDateMatch[2] - 1, issueDateMatch[1]);
@@ -360,6 +387,7 @@
                             const [day, monthName] = dateStr.split(' ');
                             const monthIndex = monthMap[monthName.slice(0, 3)];
                             let year = issueDate.getFullYear();
+                            // Handle year change for bills spanning across New Year
                             if (monthIndex > issueDate.getMonth() && Math.abs(monthIndex - issueDate.getMonth()) > 6) {
                                 year -= 1;
                             }
@@ -380,7 +408,6 @@
                 }
             }
 
-
             return {
                 totalBill: totalBillMatch ? parseFloat(totalBillMatch[1].replace('$', '')) : null,
                 totalCharges: chargesMatch ? parseFloat(chargesMatch[1]) : null,
@@ -395,6 +422,7 @@
             };
         }
 
+        // Calculates the estimated cost based on a TOU plan
         function calculateTouCost(data, rates) {
             if (data.billingDays === 0) return { total: 0 };
 
@@ -415,6 +443,7 @@
             };
         }
 
+        // Formats a number into a currency string ($X.XX or -$X.XX)
         function formatCurrency(value) {
             const amount = value || 0;
             if (amount < 0) {
@@ -423,14 +452,17 @@
             return `$${amount.toFixed(2)}`;
         }
 
-        function displayResult(fileName, amberData, touBreakdown, difference) {
+        // Displays the result for a single bill (monthly breakdown)
+        function displayMonthlyResult(fileName, amberData, touBreakdown, difference) {
              const resultEl = document.createElement('div');
              resultEl.className = 'p-4 border rounded-lg bg-gray-50';
              
-             const differenceColor = difference > 0 ? 'text-red-600' : 'text-green-600';
-             const differenceSign = difference > 0 ? '+' : '';
-             const savingsText = difference > 0 ? 'Higher Cost' : 'Savings';
+             // If difference > 0, TOU is more expensive, meaning Amber provided savings.
+             const amberSavedMoney = difference > 0;
+             const savingsColor = amberSavedMoney ? 'text-green-600' : 'text-red-600';
+             const savingsText = amberSavedMoney ? 'Savings with Amber' : 'TOU Was Cheaper By';
 
+             // Tooltip for Amber bill breakdown
              const amberTooltip = `
                 <div class="tooltip-text">
                     Charges: ${formatCurrency(amberData.totalCharges)}<br>
@@ -440,6 +472,7 @@
                 </div>
              `;
 
+             // Tooltip for TOU estimate breakdown
              const touTooltip = `
                 <div class="tooltip-text">
                     Peak: ${formatCurrency(touBreakdown.peakCost)} (${(amberData.peakKwh || 0).toFixed(1)} kWh)<br>
@@ -463,29 +496,45 @@
                         TOU Estimate: <span class="font-medium">${formatCurrency(touBreakdown.total)}</span>
                         ${touTooltip}
                     </div>
-                    <p>${savingsText}: <span class="font-bold ${differenceColor}">${differenceSign}$${Math.abs(difference).toFixed(2)}</span></p>
+                    <p>${savingsText}: <span class="font-bold ${savingsColor}">${formatCurrency(Math.abs(difference))}</span></p>
                 </div>
              `;
-             resultsOutput.appendChild(resultEl);
+             monthlyResultsOutput.appendChild(resultEl);
         }
         
-        function displayTotals(totalAmber, totalTou, totalDifference) {
-            const differenceColor = totalDifference > 0 ? 'text-red-700' : 'text-green-700';
-            const differenceSign = totalDifference > 0 ? '+' : '';
-            const savingsText = totalDifference > 0 ? 'Total Higher Cost' : 'Total Savings';
+        // Displays the summary of all processed bills
+        function displaySummary(totalAmber, totalTou, totalDifference, totalDays) {
+            // If totalDifference > 0, TOU cost more overall, so Amber saved money.
+            const amberSavedMoney = totalDifference > 0;
+            const differenceColor = amberSavedMoney ? 'text-green-700' : 'text-red-700';
+            const savingsText = amberSavedMoney ? 'Total Savings with Amber' : 'TOU Was Cheaper By';
             
-            totalsOutput.innerHTML = `
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            let dailySavingsText = '';
+            if (totalDays > 0) {
+                const dailyDifference = totalDifference / totalDays;
+                const dailyAmberSaved = dailyDifference > 0;
+                const dailyColor = dailyAmberSaved ? 'text-green-700' : 'text-red-700';
+                const dailyLabel = dailyAmberSaved ? 'Avg. Daily Savings' : 'Avg. Daily Extra Cost';
+                dailySavingsText = `<p>${dailyLabel}: <span class="font-semibold ${dailyColor}">${formatCurrency(Math.abs(dailyDifference))}</span></p>`;
+            }
+
+            summaryOutput.innerHTML = `
+                <h3 class="text-xl font-semibold mb-3">Overall Summary</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-md">
                     <p>Total Amber Cost: <span class="font-semibold">${formatCurrency(totalAmber)}</span></p>
+                    <p>${savingsText}: <span class="font-extrabold ${differenceColor}">${formatCurrency(Math.abs(totalDifference))}</span></p>
                     <p>Total TOU Estimate: <span class="font-semibold">${formatCurrency(totalTou)}</span></p>
-                    <p>${savingsText}: <span class="font-extrabold ${differenceColor}">${differenceSign}$${Math.abs(totalDifference).toFixed(2)}</span></p>
+                    ${dailySavingsText}
                 </div>
             `;
         }
 
+        // Shows a modal dialog for alerts and errors
         function showModal(message) {
-            if (document.getElementById('alert-modal')) {
-                document.getElementById('alert-modal').remove();
+            // Remove any existing modal first
+            const existingModal = document.getElementById('alert-modal');
+            if (existingModal) {
+                existingModal.remove();
             }
             const modal = document.createElement('div');
             modal.id = 'alert-modal';

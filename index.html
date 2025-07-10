@@ -317,13 +317,13 @@
             const chargesMatch = text.match(/CHARGES TOTAL\s+\$([\d\.]+)/);
             const creditsMatch = text.match(/CREDITS\s+\$([\d\.]+)/);
             
-            const peakRegex = /Network\s*-\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
-            const offPeakRegex = /Network\s*-\s*Off\s*[-–]?\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
-            const shoulderRegex = /Network\s*-\s*Flat\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
+            const peakRegex = /  Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
+            const offPeakRegex = /Off\s*[-–]?\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
+            const shoulderRegex = /Flat\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             
             const sumMatches = (regex, txt) => {
                 const matches = [...txt.matchAll(regex)];
-                return matches.length > 0 ? matches.reduce((sum, match) => sum + parseFloat(match[1]), 0) : null;
+                return matches.length > 0 ? matches.reduce((sum, match) => sum + parseFloat(match[1]), 0) : 0;
             };
 
             const peakKwh = sumMatches(peakRegex, text);
@@ -350,7 +350,7 @@
                 const issueDateMatch = text.match(/Issue Date:\s*(\d{2})\/(\d{2})\/(\d{4})/);
                 if (issueDateMatch) {
                     const issueDate = new Date(issueDateMatch[3], issueDateMatch[2] - 1, issueDateMatch[1]);
-                    const dateRangeRegex = /Network\s*-\s*(?:Peak|Off\s*[-–]?\s*Peak|Flat)\s*Energy\s+(\d{2}\s+\w{3,4})\s*[-–]\s*(\d{2}\s+\w{3,4})/g;
+                    const dateRangeRegex = /(?:Peak|Off\s*[-–]?\s*Peak|Flat)\s*Energy\s+(\d{2}\s+\w{3,4})\s*[-–]\s*(\d{2}\s+\w{3,4})/g;
                     let allDates = [];
                     let match;
                     const monthMap = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };

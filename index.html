@@ -534,14 +534,19 @@
                 ${summaryDateRangeHTML}
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-md">
                     <p>Total Amber Cost: <span class="font-semibold">${formatCurrency(totalAmber)}</span></p>
-                    <p>${savingsText}: <span class="font-extrabold ${differenceColor}">${formatCurrency(Math.abs(totalDifference))}</span></p>
                     <p>Total TOU Estimate: <span class="font-semibold">${formatCurrency(totalTou)}</span></p>
+                    
+                    <p>${savingsText}: <span class="font-extrabold ${differenceColor}">${formatCurrency(Math.abs(totalDifference))}</span></p>
                     ${dailySavingsText}
+
+                    <p>Total Consumption: <span class="font-semibold">${totalConsumptionKwh.toFixed(1)} kWh</span></p>
                     <div class="tooltip-container border-b-2 border-dotted border-gray-400">
                         Average Consumption Rate: <span class="font-semibold">${avgConsumptionRate.toFixed(2)} c/kWh</span>
                         ${avgConsumptionTooltip}
                     </div>
-                    <div class="tooltip-container border-b-2 border-dotted border-gray-400">
+
+                    <p>Total Feed-In: <span class="font-semibold">${totalFeedInKwh.toFixed(1)} kWh</span></p>
+                     <div class="tooltip-container border-b-2 border-dotted border-gray-400">
                         Average Feed-In Rate: <span class="font-semibold">${avgFeedInRate.toFixed(2)} c/kWh</span>
                         ${avgFeedInTooltip}
                     </div>

@@ -31,7 +31,7 @@
         }
         .tooltip-text {
             visibility: hidden;
-            width: 220px;
+            width: 240px;
             background-color: #2d3748; /* gray-800 */
             color: #fff;
             text-align: left;
@@ -41,10 +41,11 @@
             z-index: 10;
             bottom: 125%;
             left: 50%;
-            margin-left: -110px;
+            margin-left: -120px;
             opacity: 0;
             transition: opacity 0.3s;
             font-size: 0.8rem;
+            line-height: 1.4;
         }
         .tooltip-text::after {
             content: "";
@@ -230,13 +231,11 @@
                 return;
             }
 
-            // Show loader and clear previous results
             resultsSection.classList.remove('hidden');
             loader.classList.remove('hidden');
             summaryOutput.innerHTML = '';
             monthlyResultsOutput.innerHTML = '';
 
-            // Get current TOU rates from input fields
             const touRates = {
                 peak: parseFloat(peakRateInput.value),
                 offpeak: parseFloat(offpeakRateInput.value),
@@ -250,9 +249,12 @@
             let grandTotalTou = 0;
             let grandTotalDifference = 0;
             let grandTotalBillingDays = 0;
+            let grandTotalConsumptionKwh = 0;
+            let grandTotalConsumptionCost = 0;
+            let grandTotalFeedInKwh = 0;
+            let grandTotalFeedInCredit = 0;
             let allBillsData = [];
 
-            // Create a promise for each file to be processed
             const filePromises = Array.from(files).map(file => {
                 return new Promise((resolve, reject) => {
                     const fileReader = new FileReader();
@@ -261,7 +263,6 @@
                             const typedarray = new Uint8Array(event.target.result);
                             const pdf = await pdfjsLib.getDocument(typedarray).promise;
                             let fullText = '';
-                            // Extract text from all pages of the PDF
                             for (let i = 1; i <= pdf.numPages; i++) {
                                 const page = await pdf.getPage(i);
                                 const textContent = await page.getTextContent();
@@ -271,26 +272,36 @@
                             
                             const extractedData = parseBillText(fullText);
                             
-                            // Validate that essential data was extracted
                             const missingFields = [];
                             if (extractedData.totalBill === null) missingFields.push('Total Bill');
                             if (extractedData.sortableDate === null) missingFields.push('Billing Period');
                             if (extractedData.billingDays === null) missingFields.push('Billing Days');
-                            
+                            if (extractedData.totalCharges === null) missingFields.push('Total Charges');
+                            if (extractedData.supplyChargeCost === null) missingFields.push('Supply Charge Cost');
+
                             if (missingFields.length > 0) {
                                 showModal(`Could not extract the following from ${file.name}: ${missingFields.join(', ')}. Please check the bill format.`);
-                                resolve(null); // Resolve with null if parsing fails
+                                resolve(null);
                                 return;
                             }
                             
-                            // Calculate costs and totals
                             const touBreakdown = calculateTouCost(extractedData, touRates);
                             const difference = touBreakdown.total - extractedData.totalBill;
 
+                            // Accumulate totals for summary
                             grandTotalAmber += extractedData.totalBill;
                             grandTotalTou += touBreakdown.total;
                             grandTotalDifference += difference;
                             grandTotalBillingDays += extractedData.billingDays;
+                            
+                            const consumptionKwh = (extractedData.peakKwh || 0) + (extractedData.offpeakKwh || 0) + (extractedData.shoulderKwh || 0);
+                            const consumptionCost = (extractedData.totalCharges || 0) - (extractedData.supplyChargeCost || 0);
+                            
+                            grandTotalConsumptionKwh += consumptionKwh;
+                            grandTotalConsumptionCost += consumptionCost;
+                            grandTotalFeedInKwh += extractedData.solarExportKwh || 0;
+                            grandTotalFeedInCredit += extractedData.totalCredits || 0;
+
 
                             allBillsData.push({
                                 fileName: file.name,
@@ -310,45 +321,42 @@
                 });
             });
 
-            // Wait for all files to be processed
             await Promise.all(filePromises);
 
-            // Sort bills by date
             allBillsData.sort((a, b) => {
                 if (!a || !b) return 0;
                 return a.amberData.sortableDate - b.amberData.sortableDate;
             });
 
-            // Display each monthly result
             allBillsData.forEach(data => {
                 if (data) {
                     displayMonthlyResult(data.fileName, data.amberData, data.touBreakdown, data.difference);
                 }
             });
 
-            // Display the grand total summary if any bills were processed successfully
             const validBills = allBillsData.filter(d => d);
             if (validBills.length > 0) {
                 const startDateStr = validBills[0].amberData.dateRange.split(' - ')[0];
                 const endDateStr = validBills[validBills.length - 1].amberData.dateRange.split(' - ')[1];
-                displaySummary(grandTotalAmber, grandTotalTou, grandTotalDifference, grandTotalBillingDays, startDateStr, endDateStr);
+                displaySummary(
+                    grandTotalAmber, grandTotalTou, grandTotalDifference, grandTotalBillingDays, startDateStr, endDateStr,
+                    grandTotalConsumptionKwh, grandTotalConsumptionCost, grandTotalFeedInKwh, grandTotalFeedInCredit
+                );
             }
 
             loader.classList.add('hidden');
         });
         
-        // Parses the extracted PDF text to find billing data
         function parseBillText(text) {
-             // Regex patterns to find specific data points in the bill text
             const totalBillMatch = text.match(/BILL AMOUNT\s+([-\$\d\.]+)/);
             const chargesMatch = text.match(/CHARGES TOTAL\s+\$([\d\.]+)/);
             const creditsMatch = text.match(/CREDITS\s+\$([\d\.]+)/);
+            const supplyChargeCostMatch = text.match(/Supply Charge.*?\$([\d\.]+)/);
             
             const peakRegex = /  Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             const offPeakRegex = /Off\s*[-–]?\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             const shoulderRegex = /Flat\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
             
-            // Helper to sum up multiple matches (e.g., if usage is split across months)
             const sumMatches = (regex, txt) => {
                 const matches = [...txt.matchAll(regex)];
                 return matches.length > 0 ? matches.reduce((sum, match) => sum + parseFloat(match[1]), 0) : 0;
@@ -364,19 +372,17 @@
             let displayDateRange = 'N/A';
             let sortableDate = null;
 
-            // Attempt to find a clear "Billing period: DD/MM/YYYY - DD/MM/YYYY"
             const explicitBillingPeriodMatch = text.match(/Billing period:(?:\s*\d+\s+Days\s+\()?\s*(\d{2})\/(\d{2})\/(\d{4})\s*[-–]\s*(\d{2})\/(\d{2})\/(\d{4})\)?/);
 
             if (explicitBillingPeriodMatch) {
                 const [_, startDay, startMonth, startYear, endDay, endMonth, endYear] = explicitBillingPeriodMatch;
                 const startDate = new Date(`${startYear}-${startMonth}-${startDay}`);
                 const endDate = new Date(`${endYear}-${endMonth}-${endDay}`);
-                sortableDate = startDate; // Use start date for sorting
+                sortableDate = startDate;
 
                 const format = (date) => `${date.getDate().toString().padStart(2, '0')} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
                 displayDateRange = `${format(startDate)} - ${format(endDate)}`;
             } else {
-                // Fallback: try to infer date range from usage periods and issue date
                 const issueDateMatch = text.match(/Issue Date:\s*(\d{2})\/(\d{2})\/(\d{4})/);
                 if (issueDateMatch) {
                     const issueDate = new Date(issueDateMatch[3], issueDateMatch[2] - 1, issueDateMatch[1]);
@@ -390,7 +396,6 @@
                             const [day, monthName] = dateStr.split(' ');
                             const monthIndex = monthMap[monthName.slice(0, 3)];
                             let year = issueDate.getFullYear();
-                            // Handle year change for bills spanning across New Year
                             if (monthIndex > issueDate.getMonth() && Math.abs(monthIndex - issueDate.getMonth()) > 6) {
                                 year -= 1;
                             }
@@ -415,6 +420,7 @@
                 totalBill: totalBillMatch ? parseFloat(totalBillMatch[1].replace('$', '')) : null,
                 totalCharges: chargesMatch ? parseFloat(chargesMatch[1]) : null,
                 totalCredits: creditsMatch ? parseFloat(creditsMatch[1]) : null,
+                supplyChargeCost: supplyChargeCostMatch ? parseFloat(supplyChargeCostMatch[1]) : null,
                 dateRange: displayDateRange,
                 peakKwh: peakKwh,
                 offpeakKwh: offpeakKwh,
@@ -425,7 +431,6 @@
             };
         }
 
-        // Calculates the estimated cost based on a TOU plan
         function calculateTouCost(data, rates) {
             if (data.billingDays === 0) return { total: 0 };
 
@@ -446,7 +451,6 @@
             };
         }
 
-        // Formats a number into a currency string ($X.XX or -$X.XX)
         function formatCurrency(value) {
             const amount = value || 0;
             if (amount < 0) {
@@ -455,17 +459,14 @@
             return `$${amount.toFixed(2)}`;
         }
 
-        // Displays the result for a single bill (monthly breakdown)
         function displayMonthlyResult(fileName, amberData, touBreakdown, difference) {
              const resultEl = document.createElement('div');
              resultEl.className = 'p-4 border rounded-lg bg-gray-50';
              
-             // If difference > 0, TOU is more expensive, meaning Amber provided savings.
              const amberSavedMoney = difference > 0;
              const savingsColor = amberSavedMoney ? 'text-green-600' : 'text-red-600';
              const savingsText = amberSavedMoney ? 'Savings with Amber' : 'TOU Was Cheaper By';
 
-             // Tooltip for Amber bill breakdown
              const amberTooltip = `
                 <div class="tooltip-text">
                     Charges: ${formatCurrency(amberData.totalCharges)}<br>
@@ -475,7 +476,6 @@
                 </div>
              `;
 
-             // Tooltip for TOU estimate breakdown
              const touTooltip = `
                 <div class="tooltip-text">
                     Peak: ${formatCurrency(touBreakdown.peakCost)} (${(amberData.peakKwh || 0).toFixed(1)} kWh)<br>
@@ -505,9 +505,7 @@
              monthlyResultsOutput.appendChild(resultEl);
         }
         
-        // Displays the summary of all processed bills
-        function displaySummary(totalAmber, totalTou, totalDifference, totalDays, startDateStr, endDateStr) {
-            // If totalDifference > 0, TOU cost more overall, so Amber saved money.
+        function displaySummary(totalAmber, totalTou, totalDifference, totalDays, startDateStr, endDateStr, totalConsumptionKwh, totalConsumptionCost, totalFeedInKwh, totalFeedInCredit) {
             const amberSavedMoney = totalDifference > 0;
             const differenceColor = amberSavedMoney ? 'text-green-700' : 'text-red-700';
             const savingsText = amberSavedMoney ? 'Total Savings with Amber' : 'TOU Was Cheaper By';
@@ -521,25 +519,37 @@
                 dailySavingsText = `<p>${dailyLabel}: <span class="font-semibold ${dailyColor}">${formatCurrency(Math.abs(dailyDifference))}</span></p>`;
             }
 
+            const avgConsumptionRate = totalConsumptionKwh > 0 ? (totalConsumptionCost / totalConsumptionKwh) * 100 : 0;
+            const avgFeedInRate = totalFeedInKwh > 0 ? (totalFeedInCredit / totalFeedInKwh) * 100 : 0;
+
             const summaryDateRangeHTML = startDateStr && endDateStr
                 ? `<h4 class="text-md font-medium text-gray-700 mb-3">${startDateStr} to ${endDateStr} <span class="font-normal text-gray-500">(${totalDays} billed days)</span></h4>`
                 : '';
 
+            const avgConsumptionTooltip = `<div class="tooltip-text">This is the effective c/kWh for all the energy you used, with the daily supply charge stripped out so you're comparing the pure energy cost.</div>`;
+            const avgFeedInTooltip = `<div class="tooltip-text">This is the effective c/kWh you received for the solar energy you exported to the grid.</div>`;
+            
             summaryOutput.innerHTML = `
                 <h3 class="text-xl font-semibold mb-2">Overall Summary</h3>
                 ${summaryDateRangeHTML}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-md">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-md">
                     <p>Total Amber Cost: <span class="font-semibold">${formatCurrency(totalAmber)}</span></p>
                     <p>${savingsText}: <span class="font-extrabold ${differenceColor}">${formatCurrency(Math.abs(totalDifference))}</span></p>
                     <p>Total TOU Estimate: <span class="font-semibold">${formatCurrency(totalTou)}</span></p>
                     ${dailySavingsText}
+                    <div class="tooltip-container border-b-2 border-dotted border-gray-400">
+                        Average Consumption Rate: <span class="font-semibold">${avgConsumptionRate.toFixed(2)} c/kWh</span>
+                        ${avgConsumptionTooltip}
+                    </div>
+                    <div class="tooltip-container border-b-2 border-dotted border-gray-400">
+                        Average Feed-In Rate: <span class="font-semibold">${avgFeedInRate.toFixed(2)} c/kWh</span>
+                        ${avgFeedInTooltip}
+                    </div>
                 </div>
             `;
         }
 
-        // Shows a modal dialog for alerts and errors
         function showModal(message) {
-            // Remove any existing modal first
             const existingModal = document.getElementById('alert-modal');
             if (existingModal) {
                 existingModal.remove();

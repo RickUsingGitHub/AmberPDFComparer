@@ -80,29 +80,29 @@
                 <select id="plan-selector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
                     <!-- Options will be populated by JavaScript -->
                 </select>
-                <p class="text-xs text-gray-500 mt-1">Rates are indicative and sourced July 2024. Please verify with the retailer for the most current rates.</p>
+                <p class="text-xs text-gray-500 mt-1">Rates are indicative and sourced for July 2025. Please verify with the retailer for the most current rates.</p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label for="peak-rate" class="block text-sm font-medium text-gray-700">Peak Rate (c/kWh)</label>
-                    <input type="number" id="peak-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="peak-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" step="0.01">
                 </div>
                 <div>
                     <label for="offpeak-rate" class="block text-sm font-medium text-gray-700">Off-Peak Rate (c/kWh)</label>
-                    <input type="number" id="offpeak-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="offpeak-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" step="0.01">
                 </div>
                 <div>
                     <label for="shoulder-rate" class="block text-sm font-medium text-gray-700">Shoulder/Flat Rate (c/kWh)</label>
-                    <input type="number" id="shoulder-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="shoulder-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" step="0.01">
                 </div>
                 <div>
                     <label for="feedin-rate" class="block text-sm font-medium text-gray-700">Solar Feed-In (c/kWh)</label>
-                    <input type="number" id="feedin-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="feedin-rate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" step="0.01">
                 </div>
                 <div>
                     <label for="daily-charge" class="block text-sm font-medium text-gray-700">Daily Supply Charge (c/day)</label>
-                    <input type="number" id="daily-charge" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                    <input type="number" id="daily-charge" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" step="0.01">
                 </div>
             </div>
         </section>
@@ -138,31 +138,39 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
-        // Pre-defined TOU plans for selection
+        // Pre-defined TOU plans for selection, updated with July 2025 rates
         const touPlans = {
-            "agl-standing": {
-                name: "AGL - Standing Offer (July 2024)",
-                peak: 59.30,
-                offpeak: 27.07,
-                shoulder: 33.04,
-                feedIn: 7.7,
-                daily: 106.61
+            "agl-standing-2025": {
+                name: "AGL - Standing Offer (July 2025)",
+                peak: 64.88,
+                offpeak: 29.81,
+                shoulder: 36.84,
+                feedIn: 8.0,
+                daily: 108.97
             },
-            "energy-aus-balance": {
-                name: "EnergyAustralia - Balance Plan (July 2024)",
-                peak: 65.44,
-                offpeak: 27.24,
-                shoulder: 34.42,
-                feedIn: 7.6,
-                daily: 115.25
+            "energy-aus-balance-2025": {
+                name: "EnergyAustralia - Balance Plan (Est. July 2025)",
+                peak: 71.33,
+                offpeak: 29.70,
+                shoulder: 37.52,
+                feedIn: 7.5,
+                daily: 125.62
             },
-            "origin-go": {
-                name: "Origin - Go Variable (July 2024)",
-                peak: 50.1,
-                offpeak: 24.5,
-                shoulder: 31.2,
+            "origin-go-2025": {
+                name: "Origin - Go Variable (Est. July 2025)",
+                peak: 54.61,
+                offpeak: 26.71,
+                shoulder: 34.01,
                 feedIn: 7.0,
-                daily: 100.5
+                daily: 109.55
+            },
+            "red-energy-2025": {
+                name: "Red Energy - Living Energy (Est. July 2025)",
+                peak: 48.00,
+                offpeak: 26.00,
+                shoulder: 34.00,
+                feedIn: 4.0,
+                daily: 109.00
             },
             "custom": {
                 name: "Custom / Manual Entry",
@@ -219,8 +227,8 @@
         // On page load, populate plans and set a default
         window.onload = () => {
             populatePlanSelector();
-            planSelector.value = "agl-standing";
-            updateInputsForPlan("agl-standing");
+            planSelector.value = "agl-standing-2025";
+            updateInputsForPlan("agl-standing-2025");
         };
 
         // Main function to process the PDF bills

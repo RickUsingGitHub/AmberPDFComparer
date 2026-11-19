@@ -273,7 +273,8 @@
                     fileReader.onload = async (event) => {
                         try {
                             const typedarray = new Uint8Array(event.target.result);
-                            const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                            // isEvalSupported: false closes CVE-2024-4367 (a crafted PDF running script in this page).
+                            const pdf = await pdfjsLib.getDocument({ data: typedarray, isEvalSupported: false }).promise;
                             let fullText = '';
                             for (let i = 1; i <= pdf.numPages; i++) {
                                 const page = await pdf.getPage(i);
@@ -463,6 +464,11 @@
             };
         }
 
+        // Text from a file name or a PDF goes into innerHTML only after this.
+        function escapeHTML(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+        }
+
         function formatCurrency(value) {
             const amount = value || 0;
             if (amount < 0) {
@@ -501,7 +507,7 @@
              `;
 
              resultEl.innerHTML = `
-                <h3 class="font-semibold text-lg">${amberData.dateRange} <span class="text-sm font-normal text-gray-500">(${fileName})</span></h3>
+                <h3 class="font-semibold text-lg">${escapeHTML(amberData.dateRange)} <span class="text-sm font-normal text-gray-500">(${escapeHTML(fileName)})</span></h3>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-sm">
                     <div class="tooltip-container">
                         Amber Bill: <span class="font-medium">${formatCurrency(amberData.totalBill)}</span>
@@ -535,7 +541,7 @@
             const avgFeedInRate = totalFeedInKwh > 0 ? (totalFeedInCredit / totalFeedInKwh) * 100 : 0;
 
             const summaryDateRangeHTML = startDateStr && endDateStr
-                ? `<h4 class="text-md font-medium text-gray-700 mb-3">${startDateStr} to ${endDateStr} <span class="font-normal text-gray-500">(${totalDays} billed days)</span></h4>`
+                ? `<h4 class="text-md font-medium text-gray-700 mb-3">${escapeHTML(startDateStr)} to ${escapeHTML(endDateStr)} <span class="font-normal text-gray-500">(${totalDays} billed days)</span></h4>`
                 : '';
 
             const avgConsumptionTooltip = `<div class="tooltip-text">This is the effective c/kWh for all the energy you used, with the daily supply charge stripped out so you're comparing the pure energy cost.</div>`;
@@ -577,7 +583,7 @@
             modal.innerHTML = `
                 <div class="bg-white p-5 rounded-lg shadow-xl max-w-sm mx-auto">
                     <div class="text-center">
-                        <p class="text-lg font-medium text-gray-900 mb-4">${message}</p>
+                        <p class="text-lg font-medium text-gray-900 mb-4">${escapeHTML(message)}</p>
                         <button id="close-modal-btn" class="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                             Close
                         </button>

@@ -365,25 +365,30 @@
         });
         
         function parseBillText(text) {
-            const totalBillMatch = text.match(/BILL AMOUNT\s+([-\$\d\.]+)/);
-            const chargesMatch = text.match(/CHARGES TOTAL\s+\$([\d\.]+)/);
-            const creditsMatch = text.match(/CREDITS\s+\$([\d\.]+)/);
-            const supplyChargeCostMatch = text.match(/Supply Charge.*?\$([\d\.]+)/);
-            
-            const peakRegex = /  Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
-            const offPeakRegex = /Off\s*[-–]?\s*Peak\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
-            const shoulderRegex = /Flat\s*Energy\s+\d{2}\s+\w{3,4}\s*[-–]\s*\d{2}\s+\w{3,4}\s+([\d\.]+)/g;
-            
+            // Numbers on a bill can have thousands separators ($1,234.56, 1,234.5 kWh): read them whole.
+            const NUM = '(\\d[\\d,]*(?:\\.\\d+)?)';
+            const toNumber = (s) => parseFloat(String(s).replace(/[$,]/g, ''));
+            const totalBillMatch = text.match(/BILL AMOUNT\s+(-?\$?\d[\d,]*(?:\.\d+)?)/);
+            const chargesMatch = text.match(new RegExp('CHARGES TOTAL\\s+\\$' + NUM));
+            const creditsMatch = text.match(new RegExp('CREDITS\\s+\\$' + NUM));
+            const supplyChargeCostMatch = text.match(new RegExp('Supply Charge.*?\\$' + NUM));
+
+            // "Peak Energy" however it is spaced, but not the "Peak" in "Off Peak" / "Off-Peak".
+            const period = '\\s*Energy\\s+\\d{2}\\s+\\w{3,4}\\s*[-–]\\s*\\d{2}\\s+\\w{3,4}\\s+' + NUM;
+            const peakRegex = new RegExp('(?<!Off\\s*[-–]?\\s*)\\bPeak' + period, 'g');
+            const offPeakRegex = new RegExp('Off\\s*[-–]?\\s*Peak' + period, 'g');
+            const shoulderRegex = new RegExp('Flat' + period, 'g');
+
             const sumMatches = (regex, txt) => {
                 const matches = [...txt.matchAll(regex)];
-                return matches.length > 0 ? matches.reduce((sum, match) => sum + parseFloat(match[1]), 0) : 0;
+                return matches.length > 0 ? matches.reduce((sum, match) => sum + toNumber(match[1]), 0) : 0;
             };
 
             const peakKwh = sumMatches(peakRegex, text);
             const offpeakKwh = sumMatches(offPeakRegex, text);
             const shoulderKwh = sumMatches(shoulderRegex, text);
 
-            const solarExportMatch = text.match(/Solar Exports.*?([\d\.]+)kWh/);
+            const solarExportMatch = text.match(new RegExp('Solar Exports.*?' + NUM + '\\s*kWh'));
             const billingDaysMatch = text.match(/Billing Days:\s+(\d+)/);
             
             let displayDateRange = 'N/A';
@@ -434,15 +439,15 @@
             }
 
             return {
-                totalBill: totalBillMatch ? parseFloat(totalBillMatch[1].replace('$', '')) : null,
-                totalCharges: chargesMatch ? parseFloat(chargesMatch[1]) : null,
-                totalCredits: creditsMatch ? parseFloat(creditsMatch[1]) : null,
-                supplyChargeCost: supplyChargeCostMatch ? parseFloat(supplyChargeCostMatch[1]) : null,
+                totalBill: totalBillMatch ? toNumber(totalBillMatch[1]) : null,
+                totalCharges: chargesMatch ? toNumber(chargesMatch[1]) : null,
+                totalCredits: creditsMatch ? toNumber(creditsMatch[1]) : null,
+                supplyChargeCost: supplyChargeCostMatch ? toNumber(supplyChargeCostMatch[1]) : null,
                 dateRange: displayDateRange,
                 peakKwh: peakKwh,
                 offpeakKwh: offpeakKwh,
                 shoulderKwh: shoulderKwh,
-                solarExportKwh: solarExportMatch ? parseFloat(solarExportMatch[1]) : null,
+                solarExportKwh: solarExportMatch ? toNumber(solarExportMatch[1]) : null,
                 billingDays: billingDaysMatch ? parseInt(billingDaysMatch[1], 10) : null,
                 sortableDate: sortableDate
             };
